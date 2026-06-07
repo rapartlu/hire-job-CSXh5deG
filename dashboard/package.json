@@ -1,0 +1,13 @@
+{
+  "name": "deliveroo-capture-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard for Deliveroo API traffic capture",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.2"
+  }
+}

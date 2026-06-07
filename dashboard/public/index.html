@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deliveroo Traffic Capture</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+</head>
+<body>
+  <header>
+    <h1>📡 Deliveroo Traffic Capture</h1>
+    <div class="header-actions">
+      <a href="/cert.pem" class="btn btn-secondary">&#8659; Download CA cert</a>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="live">Live feed</button>
+    <button class="tab-btn" data-tab="endpoints">Endpoints</button>
+    <button class="tab-btn" data-tab="export">Export</button>
+    <button class="tab-btn" data-tab="setup">Setup</button>
+  </nav>
+
+  <main>
+    <!-- Live feed -->
+    <section id="tab-live" class="tab-content active">
+      <div class="toolbar">
+        <span id="capture-count" class="badge">0 captures</span>
+        <label class="auto-refresh-label">
+          <input type="checkbox" id="auto-refresh" checked>
+          Auto-refresh (5s)
+        </label>
+        <button id="refresh-btn" class="btn btn-sm">&#8635; Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table id="captures-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Method</th>
+              <th>URL</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="captures-tbody">
+            <tr class="empty-row">
+              <td colspan="4">No captures yet &mdash; browse deliveroo.co.uk with the proxy running</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="inspector" class="inspector hidden">
+        <div class="inspector-header">
+          <strong id="insp-title"></strong>
+          <button id="insp-close">&#10005;</button>
+        </div>
+        <div class="inspector-body">
+          <div class="insp-section">
+            <h3>Request</h3>
+            <pre id="insp-req-headers" class="insp-headers"></pre>
+            <pre id="insp-req-body" class="insp-body"></pre>
+          </div>
+          <div class="insp-section">
+            <h3>Response (<span id="insp-status"></span>)</h3>
+            <pre id="insp-resp-headers" class="insp-headers"></pre>
+            <pre id="insp-resp-body" class="insp-body"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Endpoints -->
+    <section id="tab-endpoints" class="tab-content hidden">
+      <button id="endpoints-refresh" class="btn btn-sm" style="margin-bottom:1rem">&#8635; Refresh</button>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Path</th>
+              <th>Requests</th>
+            </tr>
+          </thead>
+          <tbody id="endpoints-tbody">
+            <tr class="empty-row"><td colspan="3">No data yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Export -->
+    <section id="tab-export" class="tab-content hidden">
+      <div class="export-card">
+        <h2>Export captured traffic</h2>
+        <p>Download all captured requests and responses as a CSV file. Attach this to the GitHub issue so the fleet can build the Milestone 2 filtering rules.</p>
+        <a href="/api/captures.csv" class="btn btn-primary">&#8659; Download captures.csv</a>
+      </div>
+    </section>
+
+    <!-- Setup -->
+    <section id="tab-setup" class="tab-content hidden">
+      <div class="setup-steps">
+        <h2>One-time setup</h2>
+        <ol>
+          <li>
+            <strong>Download the CA cert</strong>
+            <p><a href="/cert.pem" class="btn btn-secondary btn-sm">&#8659; mitmproxy-ca-cert.pem</a></p>
+            <p class="hint">The cert is generated when the proxy first starts. If this gives a 404, wait a few seconds and try again.</p>
+          </li>
+          <li>
+            <strong>Install in Chrome</strong>
+            <p>Go to <code>chrome://settings/security</code> &rarr; Manage certificates &rarr; Authorities &rarr; Import &rarr; select the .pem file &rarr; tick "Trust this certificate for identifying websites".</p>
+          </li>
+          <li>
+            <strong>Install in Firefox</strong>
+            <p>Preferences &rarr; Privacy &amp; Security &rarr; Certificates &rarr; View Certificates &rarr; Authorities &rarr; Import &rarr; select the .pem file &rarr; tick "Trust this CA to identify websites".</p>
+          </li>
+          <li>
+            <strong>Configure browser proxy</strong>
+            <p>Set HTTP proxy to <code>127.0.0.1</code>, port <code>8080</code>.</p>
+            <p class="hint">Chrome: Settings &rarr; System &rarr; Open your computer's proxy settings. Firefox: Preferences &rarr; Network Settings &rarr; Manual proxy &rarr; HTTP proxy = 127.0.0.1, port 8080, also use for HTTPS.</p>
+          </li>
+          <li>
+            <strong>Browse Deliveroo</strong>
+            <p>Open <a href="https://deliveroo.co.uk" target="_blank" rel="noopener">deliveroo.co.uk</a> and search for restaurants or dishes. Traffic appears in the Live feed tab above.</p>
+          </li>
+          <li>
+            <strong>Export for analysis</strong>
+            <p>After a few searches, go to the Export tab and download the CSV. Attach it to the GitHub issue for Milestone 2.</p>
+          </li>
+        </ol>
+        <p class="privacy-note">&#9888; Session tokens and responses are stored in a local SQLite file on your machine. Nothing is sent anywhere outside your machine. The proxy captures and stores locally only.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Built by Fleet &middot; Alpha access</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

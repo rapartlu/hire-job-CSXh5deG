@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  proxy:
+    build: ./proxy
+    ports:
+      - "8080:8080"
+    volumes:
+      - data:/data
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      - data:/data
+    depends_on:
+      - proxy
+    restart: unless-stopped
+
+volumes:
+  data:

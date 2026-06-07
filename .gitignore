@@ -1,0 +1,3 @@
+data/captures.db
+data/mitmproxy-ca-cert.pem
+dashboard/node_modules/
