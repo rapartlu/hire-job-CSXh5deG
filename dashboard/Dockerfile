@@ -1,4 +1,5 @@
-FROM node:20-alpine
+# node:20-slim (Debian) avoids Alpine/musl prebuilt issues with better-sqlite3
+FROM node:20-slim
 
 WORKDIR /app
 
