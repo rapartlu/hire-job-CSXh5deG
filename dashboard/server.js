@@ -16,7 +16,18 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_PATH = process.env.DB_PATH || '/data/captures.db';
 const DATA_DIR = path.dirname(DB_PATH);
-const CERT_PATH = path.join(DATA_DIR, 'mitmproxy-ca-cert.pem');
+// The proxy runs mitmproxy with confdir=/data/mitmproxy, so the CA cert lands
+// at /data/mitmproxy/mitmproxy-ca-cert.pem on the shared volume. The legacy
+// path (a direct child of the data dir) is kept as a fallback in case an older
+// proxy image is still running.
+const CERT_PATHS = [
+  path.join(DATA_DIR, 'mitmproxy', 'mitmproxy-ca-cert.pem'),
+  path.join(DATA_DIR, 'mitmproxy-ca-cert.pem'),
+];
+
+function findCert() {
+  return CERT_PATHS.find((p) => fs.existsSync(p));
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -26,14 +37,15 @@ function getDb() {
 
 // CA cert download -- browser needs this to trust the proxy
 app.get('/cert.pem', (req, res) => {
-  if (!fs.existsSync(CERT_PATH)) {
+  const certPath = findCert();
+  if (!certPath) {
     return res.status(404).json({
       error: 'Cert not yet available -- proxy may still be starting (give it a few seconds)',
     });
   }
   res.setHeader('Content-Type', 'application/x-pem-file');
   res.setHeader('Content-Disposition', 'attachment; filename="mitmproxy-ca-cert.pem"');
-  res.sendFile(CERT_PATH);
+  res.sendFile(certPath);
 });
 
 // List captures -- no bodies to keep payload small
