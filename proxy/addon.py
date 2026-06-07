@@ -10,10 +10,14 @@ import json
 import os
 import shutil
 import sqlite3
+import time
 from datetime import datetime, timezone
 
 DB_PATH = os.environ.get("DB_PATH", "/data/captures.db")
-CERT_SRC = "/root/.mitmproxy/mitmproxy-ca-cert.pem"
+# Use expanduser so the path resolves correctly regardless of which user
+# mitmproxy runs as inside the container (mitmproxy image uses 'mitmproxy'
+# user with home /home/mitmproxy, not /root).
+CERT_SRC = os.path.expanduser("~/.mitmproxy/mitmproxy-ca-cert.pem")
 CERT_DST = os.path.join(os.path.dirname(DB_PATH), "mitmproxy-ca-cert.pem")
 
 DELIVEROO_HOSTS = {
@@ -49,9 +53,19 @@ class DeliverooCapture:
         _ensure_db()
 
     def running(self):
-        """Copy CA cert to shared data volume once mitmproxy is ready."""
-        if os.path.exists(CERT_SRC):
-            shutil.copy(CERT_SRC, CERT_DST)
+        """Copy CA cert to shared data volume once mitmproxy is ready.
+
+        Retries for up to 5 seconds in case the cert file is not yet
+        written when this hook fires (unlikely but defensive).
+        """
+        for attempt in range(5):
+            if os.path.exists(CERT_SRC):
+                shutil.copy(CERT_SRC, CERT_DST)
+                return
+            time.sleep(1)
+        # Cert still missing after 5 attempts -- log and continue.
+        # Dashboard will return a 503 until the cert is available.
+        print(f"[CSXh5deG] WARNING: CA cert not found at {CERT_SRC} after 5 attempts")
 
     def response(self, flow):
         """Record Deliveroo API responses to SQLite."""
