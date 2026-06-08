@@ -102,6 +102,29 @@ app.get('/api/endpoints', (req, res) => {
   }
 });
 
+// Debug: all Deliveroo hosts seen through the proxy
+// Useful when the captures table is empty -- shows whether ANY Deliveroo
+// traffic is reaching the addon and which domains are being proxied.
+app.get('/api/debug/hosts', (req, res) => {
+  try {
+    const db = getDb();
+    const rows = db.prepare(
+      `SELECT host, first_seen, last_seen, request_count, is_captured
+       FROM seen_hosts
+       ORDER BY request_count DESC`
+    ).all();
+    db.close();
+    res.json(rows);
+  } catch (err) {
+    if (err.code === 'SQLITE_CANTOPEN') return res.json([]);
+    if (err.code === 'SQLITE_ERROR' && err.message.includes('no such table')) {
+      // Old DB schema (before seen_hosts was added) -- return empty
+      return res.json([]);
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Full CSV export
 app.get('/api/captures.csv', (req, res) => {
   try {
