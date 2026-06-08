@@ -158,16 +158,35 @@ Fix:
 
 The proxy is still starting up. Wait 10-15 seconds and reload http://localhost:3000/cert.pem.
 
-**Already running an older version?**
+**"Cannot GET /api/debug/hosts" (or any route returning Cannot GET)**
 
-If you cloned before 2026-06-08, pull the latest and rebuild:
+Your dashboard container is running an old image. The app code (server.js,
+addon.py) is baked into the Docker image at build time, so `git pull` alone
+does not update a running container - and plain `docker compose up` reuses the
+previously built image without picking up new code.
+
+Always rebuild after pulling:
 ```bash
 docker compose down
 git pull
-docker compose up --build
+docker compose up -d --build
 ```
 
-The latest build fixes cert delivery and Docker proxy loop protection.
+The `--build` flag is the important part. Without it, Docker reuses the cached
+image and your new routes (like `/api/debug/hosts`) will not exist yet.
+
+**Already running an older version?**
+
+Same fix as above - pull and rebuild with `--build`:
+```bash
+docker compose down
+git pull
+docker compose up -d --build
+```
+
+The latest build expands the Deliveroo API host filter (adds api.uk.deliveroo.com
+and other regional domains), adds the `/api/debug/hosts` diagnostic endpoint, and
+fixes cert delivery plus Docker proxy loop protection.
 
 ---
 
