@@ -1,6 +1,6 @@
 # Deliveroo Traffic Capture
 
-A local Docker app that intercepts Deliveroo API traffic so you can see the raw requests and responses your browser sends to `api.deliveroo.com`.
+A local Docker app that intercepts Deliveroo API traffic so you can see the raw requests and responses your browser exchanges with Deliveroo's API hosts (both `deliveroo.com` and `deliveroo.co.uk`).
 
 Run it on your machine, browse Deliveroo normally, then export the captured traffic to CSV.
 
@@ -101,7 +101,7 @@ With both the proxy and browser configured:
 2. Search for restaurants or dishes as you normally would
 3. Watch requests appear in the Live feed tab at http://localhost:3000
 
-The addon only records requests to `api.deliveroo.com` and `consumer-api.deliveroo.com`. Other sites pass through unrecorded.
+The addon records API responses from any Deliveroo domain - both `deliveroo.com` and `deliveroo.co.uk` and their subdomains (`api.`, `consumer-api.`, etc.). It captures dedicated API hosts plus any JSON responses, so HTML page loads and static assets stay out of the feed. Other sites pass through unrecorded.
 
 ---
 
