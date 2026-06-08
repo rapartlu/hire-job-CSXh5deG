@@ -24,7 +24,9 @@ DELIVEROO_API_HOSTS = {
     "api.deliveroo.com",
     "consumer-api.deliveroo.com",
     "api.uk.deliveroo.com",
+    "consumer-api.uk.deliveroo.com",
     "api.eu.deliveroo.com",
+    "consumer-api.eu.deliveroo.com",
     "graphql.deliveroo.com",
 }
 
