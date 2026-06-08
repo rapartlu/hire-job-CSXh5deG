@@ -59,22 +59,37 @@ Or go direct: http://localhost:3000/cert.pem
 
 ## Configure browser proxy
 
-Tell your browser to route traffic through the proxy at `127.0.0.1:8080`.
+Tell your **browser** to route traffic through the proxy at `127.0.0.1:8080`.
 
-**Chrome (via system proxy settings)**
+> **macOS / Windows warning:** do NOT set a system-wide proxy. Setting the system
+> proxy routes Docker's own outbound traffic through localhost:8080 as well,
+> which creates a loop - the proxy tries to forward connections through itself
+> and everything fails with "Connect call failed" errors. Configure the proxy in
+> your browser only, not in System Preferences / Windows Settings.
 
-Settings > System > Open your computer's proxy settings. Set HTTP proxy to `127.0.0.1`, port `8080`.
+**Chrome**
 
-Or launch Chrome directly with:
+Option A - command line (recommended, no extensions needed):
+
+macOS:
+```
+open -a "Google Chrome" --args --proxy-server="http://127.0.0.1:8080"
+```
+
+Linux:
 ```
 google-chrome --proxy-server="http://127.0.0.1:8080"
 ```
 
+Option B - extension: install [Proxy SwitchyOmega](https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif), create a profile with HTTP proxy `127.0.0.1:8080`, and switch to it when capturing.
+
 **Firefox**
 
-Preferences > General > Network Settings > Manual proxy configuration:
+Firefox has its own proxy settings separate from the system:
+
+Settings > General > Network Settings > Manual proxy configuration:
 - HTTP Proxy: `127.0.0.1` Port: `8080`
-- Check "Also use this proxy for HTTPS"
+- Also use this proxy for HTTPS: checked
 
 ---
 
