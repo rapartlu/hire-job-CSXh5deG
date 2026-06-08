@@ -6,6 +6,19 @@ services:
     volumes:
       - data:/data
     restart: unless-stopped
+    # Unset any system-level proxy env vars that Docker Desktop may inherit from
+    # macOS / Windows system proxy settings. Without this, if the customer sets
+    # a system proxy pointing at localhost:8080, Docker Desktop injects
+    # HTTP_PROXY=http://localhost:8080 into the container, which some Python
+    # networking code respects - causing a loop where the proxy's own upstream
+    # connections are routed back through itself (ECONNREFUSED on everything).
+    environment:
+      - HTTP_PROXY=
+      - HTTPS_PROXY=
+      - http_proxy=
+      - https_proxy=
+      - NO_PROXY=*
+      - no_proxy=*
 
   dashboard:
     build: ./dashboard
