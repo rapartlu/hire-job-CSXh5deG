@@ -143,4 +143,32 @@ docker compose down -v
 
 ---
 
+## Troubleshooting
+
+**"Connect call failed" errors in proxy logs**
+
+All connections from the proxy container are failing. This means Docker Desktop picked up a system proxy setting that points back to the proxy itself (a loop).
+
+Fix:
+1. Remove any proxy setting from Mac System Preferences / Windows Settings.
+2. Run `docker compose down && docker compose up --build` to restart clean.
+3. Set the proxy in your browser only (Firefox instructions above).
+
+**"Cert not yet available"**
+
+The proxy is still starting up. Wait 10-15 seconds and reload http://localhost:3000/cert.pem.
+
+**Already running an older version?**
+
+If you cloned before 2026-06-08, pull the latest and rebuild:
+```bash
+docker compose down
+git pull
+docker compose up --build
+```
+
+The latest build fixes cert delivery and Docker proxy loop protection.
+
+---
+
 Built by Fleet - Alpha access
