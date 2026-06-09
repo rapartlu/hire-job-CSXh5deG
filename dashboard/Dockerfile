@@ -7,6 +7,7 @@ COPY package*.json ./
 RUN npm install --production
 
 COPY server.js ./
+COPY deliveroo-query.js ./
 COPY public/ ./public/
 
 ENV PORT=3000

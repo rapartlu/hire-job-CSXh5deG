@@ -18,6 +18,7 @@
   <nav class="tabs">
     <button class="tab-btn active" data-tab="live">Live feed</button>
     <button class="tab-btn" data-tab="endpoints">Endpoints</button>
+    <button class="tab-btn" data-tab="search">Restaurant search</button>
     <button class="tab-btn" data-tab="export">Export</button>
     <button class="tab-btn" data-tab="setup">Setup</button>
   </nav>
@@ -88,6 +89,104 @@
           </tbody>
         </table>
       </div>
+    </section>
+
+    <!-- Restaurant Search (Milestone 2) -->
+    <section id="tab-search" class="tab-content hidden">
+
+      <!-- Auth -->
+      <div class="search-section">
+        <h2 class="search-section-title">Authentication</h2>
+        <p class="search-hint">
+          Paste your Deliveroo Bearer token below. To get it: open deliveroo.co.uk in your browser,
+          open DevTools &rarr; Network, reload the page, click any <code>/consumer/graphql</code>
+          request, and copy the <code>Authorization</code> header value (starts with <code>Bearer eyJ</code>).
+          Tokens expire; refresh if you get auth errors.
+        </p>
+        <div class="token-row">
+          <input type="password" id="search-token" class="token-input" placeholder="Bearer eyJhbGciO..." autocomplete="off">
+          <button id="save-token-btn" class="btn btn-sm">Save</button>
+          <span id="token-status" class="token-status"></span>
+        </div>
+      </div>
+
+      <!-- Areas -->
+      <div class="search-section">
+        <h2 class="search-section-title">Search areas</h2>
+        <p class="search-hint">
+          Add the areas you want to search. Find a geohash by visiting
+          <code>deliveroo.co.uk/restaurants/london/&lt;area&gt;</code> and copying the
+          <code>geohash=</code> query parameter from the URL.
+        </p>
+        <div id="areas-list"></div>
+        <button id="add-area-btn" class="btn btn-sm" style="margin-top:0.5rem">+ Add area</button>
+      </div>
+
+      <!-- Control plane -->
+      <div class="search-section">
+        <h2 class="search-section-title">Filters</h2>
+
+        <div class="filter-toggles">
+          <label class="filter-toggle">
+            <input type="checkbox" id="filter-multi-only">
+            Show only restaurants found in 2+ areas
+          </label>
+          <label class="filter-toggle">
+            <input type="checkbox" id="filter-exclude-area">
+            Exclude restaurants found only in:
+            <select id="filter-exclude-select" class="inline-select">
+              <option value="">(pick area)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="rule-editor-wrap">
+          <label class="rule-editor-label" for="filter-rule">
+            Custom filter rule
+            <span class="rule-hint">
+              JS expression. Variables: <code>name</code>, <code>card_text</code>, <code>found_in</code> (array of area labels), <code>found_in_count</code>.
+              Examples: <code>found_in_count &gt; 1</code>, <code>card_text.includes('4.5')</code>,
+              <code>!name.toLowerCase().includes('pizza')</code>
+            </span>
+          </label>
+          <textarea id="filter-rule" class="rule-textarea" rows="2" placeholder="// leave blank to show all restaurants"></textarea>
+          <span id="rule-error" class="rule-error"></span>
+        </div>
+      </div>
+
+      <!-- Search button + status -->
+      <div class="search-section search-actions">
+        <button id="run-search-btn" class="btn btn-primary">Search all areas</button>
+        <span id="search-status" class="search-status"></span>
+      </div>
+
+      <!-- Results -->
+      <div class="search-section" id="search-results-section" style="display:none">
+        <h2 class="search-section-title">
+          Results
+          <span id="results-summary" class="badge" style="margin-left:0.5rem"></span>
+        </h2>
+
+        <div id="search-errors" class="search-errors" style="display:none"></div>
+
+        <div class="table-wrap" style="margin-top:0.75rem">
+          <table id="results-table">
+            <thead>
+              <tr>
+                <th>Restaurant</th>
+                <th>Card info</th>
+                <th>Found in</th>
+                <th>Areas</th>
+              </tr>
+            </thead>
+            <tbody id="results-tbody">
+            </tbody>
+          </table>
+        </div>
+
+        <button id="export-results-btn" class="btn btn-sm" style="margin-top:0.75rem">&#8659; Export results as CSV</button>
+      </div>
+
     </section>
 
     <!-- Export -->
