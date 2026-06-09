@@ -118,6 +118,39 @@ The fleet uses the exported data to build the filtering and analysis rules for M
 
 ---
 
+## Milestone 2: multi-area search and location filter
+
+The **Search** tab turns a single captured search into a multi-area one. It
+reuses the restaurant-search request the proxy already captured (including your
+live session), replays it against every area you list, and merges the results
+into one deduplicated table.
+
+How it works:
+
+1. With the proxy running, do one restaurant search on https://deliveroo.co.uk
+   (type a postcode and browse the listings). That captures the search request.
+2. Open the **Search** tab at http://localhost:3000. It detects the captured
+   search and pre-fills the area it was for.
+3. Add more areas. For each, the geohash is the most reliable field (copy it
+   from a captured search URL in the Live feed); city and neighbourhood help
+   re-point the search to a different part of town.
+4. Tick any filters Deliveroo exposed for your search (offers, star rating,
+   etc.) to apply them across every area.
+5. Click **Search all areas**. Each area is queried, restaurants are merged and
+   deduplicated by id, and the table shows each restaurant's physical location
+   (parsed from its menu link) and which of your areas it appeared in.
+
+Notes:
+
+- The search replays your own captured session. If areas come back as failed,
+  the captured token has likely expired - do a fresh search on deliveroo.co.uk
+  and try again.
+- Capped at 12 areas per search to stay within Deliveroo's rate limits.
+- Nothing about this leaves your machine except the replayed calls to
+  Deliveroo's own API, using your own session.
+
+---
+
 ## Privacy
 
 Session cookies and auth tokens pass through the proxy and are stored in a SQLite file at `/data/captures.db` inside the Docker volume. Nothing is sent anywhere outside your machine. The proxy writes to local storage only.

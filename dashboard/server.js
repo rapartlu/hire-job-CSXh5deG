@@ -6,13 +6,17 @@
 //   GET /api/captures/:id  single capture with full req/resp bodies
 //   GET /api/endpoints  grouped endpoint summary
 //   GET /api/captures.csv  full export as CSV
+//   GET /api/search/template  whether a usable search capture exists (Milestone 2)
+//   POST /api/search/multi    multi-area search + location filter (Milestone 2)
 
 const express = require('express');
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const search = require('./search');
 
 const app = express();
+app.use(express.json({ limit: '1mb' }));
 const PORT = process.env.PORT || 3000;
 const DB_PATH = process.env.DB_PATH || '/data/captures.db';
 const DATA_DIR = path.dirname(DB_PATH);
@@ -148,6 +152,38 @@ app.get('/api/captures.csv', (req, res) => {
   } catch (err) {
     if (err.code === 'SQLITE_CANTOPEN') return res.status(404).send('No captures yet');
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Milestone 2: multi-area search + location filter ──────────────────────
+
+// Is there a usable restaurant-search capture to replay? Returns the location
+// and exposed filters from the most recent search, never the session token.
+app.get('/api/search/template', (req, res) => {
+  try {
+    res.json(search.templateStatus(DB_PATH));
+  } catch (err) {
+    res.status(500).json({ ready: false, error: err.message });
+  }
+});
+
+// Run a multi-area search. Body: { areas: [{ geohash, city_uname,
+// neighborhood_uname, label }], filters: { paramName: value } }.
+// Replays the captured authenticated search once per area, merges and
+// deduplicates restaurants by id, and tags each with the areas it appeared in.
+app.post('/api/search/multi', async (req, res) => {
+  const { areas, filters } = req.body || {};
+  if (!Array.isArray(areas) || areas.length === 0) {
+    return res.status(400).json({ ok: false, error: 'Provide at least one area to search.' });
+  }
+  if (areas.length > 12) {
+    return res.status(400).json({ ok: false, error: 'Limit of 12 areas per search to stay within rate limits.' });
+  }
+  try {
+    const result = await search.multiAreaSearch(DB_PATH, areas, filters || {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

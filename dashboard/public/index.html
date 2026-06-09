@@ -17,6 +17,7 @@
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="live">Live feed</button>
+    <button class="tab-btn" data-tab="search">Search</button>
     <button class="tab-btn" data-tab="endpoints">Endpoints</button>
     <button class="tab-btn" data-tab="export">Export</button>
     <button class="tab-btn" data-tab="setup">Setup</button>
@@ -67,6 +68,49 @@
             <pre id="insp-resp-headers" class="insp-headers"></pre>
             <pre id="insp-resp-body" class="insp-body"></pre>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Search (Milestone 2) -->
+    <section id="tab-search" class="tab-content hidden">
+      <div id="search-status" class="search-status">Checking for a captured search&hellip;</div>
+
+      <div id="search-controls" class="search-controls hidden">
+        <div class="search-block">
+          <h2>Areas to search</h2>
+          <p class="hint">Each row is one delivery area. Fill in what you have &mdash; geohash is the most reliable (copy it from a captured search URL). City and neighbourhood help re-point the search.</p>
+          <table id="areas-table">
+            <thead>
+              <tr><th>Label</th><th>Geohash</th><th>City</th><th>Neighbourhood</th><th></th></tr>
+            </thead>
+            <tbody id="areas-tbody"></tbody>
+          </table>
+          <button id="add-area" class="btn btn-sm">+ Add area</button>
+        </div>
+
+        <div class="search-block">
+          <h2>Filters</h2>
+          <p class="hint">Filters Deliveroo exposed for your last captured search. Toggle any to narrow results; they are applied to every area.</p>
+          <div id="filters-list" class="filters-list"><span class="hint">No filters captured yet.</span></div>
+        </div>
+
+        <div class="search-actions">
+          <button id="run-search" class="btn btn-primary">Search all areas</button>
+          <span id="search-spinner" class="hint hidden">Searching&hellip;</span>
+        </div>
+      </div>
+
+      <div id="search-results" class="search-results hidden">
+        <div class="results-summary" id="results-summary"></div>
+        <div id="area-breakdown" class="area-breakdown"></div>
+        <div class="table-wrap">
+          <table id="results-table">
+            <thead>
+              <tr><th>Restaurant</th><th>Physical location</th><th>Found in</th><th></th></tr>
+            </thead>
+            <tbody id="results-tbody"></tbody>
+          </table>
         </div>
       </div>
     </section>
