@@ -17,7 +17,6 @@ const QUERY = `
     $url: String
     $options: SearchOptionsInput
     $uuid: String!
-    $include_token: Boolean!
   ) {
     results: search(
       location: $location
@@ -161,7 +160,6 @@ const DEFAULT_VARS = {
   ],
   ui_layouts: ['LIST', 'CAROUSEL'],
   ui_blocks: ['BANNER', 'CARD', 'SHORTCUT', 'BUTTON', 'MERCHANDISING_CARD', 'ROO_BLOCK'],
-  include_token: false,
 };
 
 module.exports = { QUERY, DEFAULT_VARS };
