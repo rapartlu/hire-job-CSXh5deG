@@ -7,6 +7,11 @@
 //   GET /api/endpoints  grouped endpoint summary
 //   GET /api/captures.csv  full export as CSV
 //   POST /api/search   multi-area restaurant search via Deliveroo API (Milestone 2)
+//   GET /api/rules              list all MITM rules (Milestone 3)
+//   POST /api/rules             create rule
+//   PUT /api/rules/:id          update rule
+//   DELETE /api/rules/:id       delete rule
+//   POST /api/rules/:id/toggle  toggle active state
 
 const express = require('express');
 const Database = require('better-sqlite3');
@@ -335,6 +340,169 @@ app.post('/api/search', async (req, res) => {
     areas_searched: targetAreas.length,
     errors,
   });
+});
+
+// ── Milestone 3: Rule engine CRUD ─────────────────────────────────────────
+
+// Open DB for writes (idempotent -- proxy also runs _ensure_db).
+// Creates the rules table if absent (e.g. fresh DB before proxy has started).
+function getDbWrite() {
+  const db = new Database(DB_PATH);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS rules (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      description TEXT    NOT NULL DEFAULT '',
+      scope       TEXT    NOT NULL DEFAULT 'request',
+      match_url   TEXT    NOT NULL DEFAULT '',
+      target      TEXT    NOT NULL,
+      action      TEXT    NOT NULL DEFAULT 'set',
+      value       TEXT    NOT NULL DEFAULT 'null',
+      active      INTEGER NOT NULL DEFAULT 1,
+      created_at  TEXT    NOT NULL
+    )
+  `);
+  return db;
+}
+
+// GET /api/rules -- list all rules ordered by id
+app.get('/api/rules', (req, res) => {
+  try {
+    const db = getDb();
+    const rows = db.prepare('SELECT * FROM rules ORDER BY id ASC').all();
+    db.close();
+    res.json(rows);
+  } catch (err) {
+    if (err.code === 'SQLITE_CANTOPEN') return res.json([]);
+    if (err.message && err.message.includes('no such table')) return res.json([]);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/rules -- create a new rule
+app.post('/api/rules', (req, res) => {
+  const {
+    name,
+    description = '',
+    scope = 'request',
+    match_url = '',
+    target,
+    action = 'set',
+    value = 'null',
+    active = 1,
+  } = req.body || {};
+
+  if (!name || !target) return res.status(400).json({ error: 'name and target are required' });
+  if (!['request', 'response'].includes(scope)) {
+    return res.status(400).json({ error: 'scope must be request or response' });
+  }
+  if (!['set', 'delete'].includes(action)) {
+    return res.status(400).json({ error: 'action must be set or delete' });
+  }
+
+  try {
+    const db = getDbWrite();
+    const info = db
+      .prepare(
+        `INSERT INTO rules
+           (name, description, scope, match_url, target, action, value, active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        name,
+        description,
+        scope,
+        match_url,
+        target,
+        action,
+        value,
+        active ? 1 : 0,
+        new Date().toISOString()
+      );
+    const row = db.prepare('SELECT * FROM rules WHERE id = ?').get(info.lastInsertRowid);
+    db.close();
+    res.status(201).json(row);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/rules/:id -- update rule fields
+app.put('/api/rules/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'invalid id' });
+
+  const {
+    name,
+    description = '',
+    scope = 'request',
+    match_url = '',
+    target,
+    action = 'set',
+    value = 'null',
+    active = 1,
+  } = req.body || {};
+
+  if (!name || !target) return res.status(400).json({ error: 'name and target are required' });
+
+  try {
+    const db = getDbWrite();
+    const info = db
+      .prepare(
+        `UPDATE rules
+         SET name=?, description=?, scope=?, match_url=?, target=?, action=?, value=?, active=?
+         WHERE id=?`
+      )
+      .run(name, description, scope, match_url, target, action, value, active ? 1 : 0, id);
+
+    if (!info.changes) {
+      db.close();
+      return res.status(404).json({ error: 'Rule not found' });
+    }
+    const row = db.prepare('SELECT * FROM rules WHERE id = ?').get(id);
+    db.close();
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/rules/:id -- remove rule
+app.delete('/api/rules/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'invalid id' });
+
+  try {
+    const db = getDbWrite();
+    const info = db.prepare('DELETE FROM rules WHERE id = ?').run(id);
+    db.close();
+    if (!info.changes) return res.status(404).json({ error: 'Rule not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/rules/:id/toggle -- flip active flag
+app.post('/api/rules/:id/toggle', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'invalid id' });
+
+  try {
+    const db = getDbWrite();
+    const rule = db.prepare('SELECT id, active FROM rules WHERE id = ?').get(id);
+    if (!rule) {
+      db.close();
+      return res.status(404).json({ error: 'Rule not found' });
+    }
+    const newActive = rule.active ? 0 : 1;
+    db.prepare('UPDATE rules SET active = ? WHERE id = ?').run(newActive, id);
+    const updated = db.prepare('SELECT * FROM rules WHERE id = ?').get(id);
+    db.close();
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

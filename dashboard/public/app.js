@@ -14,6 +14,7 @@ tabs.forEach(btn => {
     document.getElementById(tabId).classList.remove('hidden');
     if (btn.dataset.tab === 'live') loadCaptures();
     if (btn.dataset.tab === 'endpoints') loadEndpoints();
+    if (btn.dataset.tab === 'rules') initRulesTab();
     if (btn.dataset.tab === 'search') initSearchTab();
   });
 });
@@ -407,4 +408,188 @@ function exportResultsCSV() {
   a.download = 'restaurant-search.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Rules (Milestone 3) ───────────────────────────────────────────────────
+
+let rulesTabReady = false;
+let editingRuleId = null;
+
+function initRulesTab() {
+  if (!rulesTabReady) {
+    rulesTabReady = true;
+    document.getElementById('add-rule-btn').addEventListener('click', openNewRuleForm);
+    document.getElementById('rf-cancel').addEventListener('click', closeRuleForm);
+    document.getElementById('rule-form').addEventListener('submit', saveRule);
+    document.getElementById('rf-action').addEventListener('change', updateValueRowVisibility);
+  }
+  loadRules();
+}
+
+async function loadRules() {
+  try {
+    const res = await fetch('/api/rules');
+    const rules = await res.json();
+    renderRules(rules);
+  } catch (e) {
+    console.error('Failed to load rules', e);
+  }
+}
+
+function renderRules(rules) {
+  const tbody = document.getElementById('rules-tbody');
+  if (!rules.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No rules yet &mdash; click &ldquo;+ New rule&rdquo; to add one. The proxy ships with three disabled examples you can enable.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rules.map(r => `
+    <tr class="rule-row${r.active ? '' : ' rule-inactive'}">
+      <td>
+        <label class="toggle-switch" title="${r.active ? 'Disable rule' : 'Enable rule'}">
+          <input type="checkbox" class="rule-toggle" data-id="${r.id}" ${r.active ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </td>
+      <td>
+        <span class="rule-name">${esc(r.name)}</span>
+        ${r.description ? '<br><small class="rule-desc">' + esc(r.description) + '</small>' : ''}
+      </td>
+      <td><span class="scope-badge scope-${esc(r.scope)}">${esc(r.scope)}</span></td>
+      <td class="mono url-cell" title="${esc(r.target)}">${esc(r.target)}</td>
+      <td>${esc(r.action)}</td>
+      <td class="mono url-cell" title="${r.action === 'delete' ? '' : esc(r.value)}">${r.action === 'delete' ? '<span class="dim">&mdash;</span>' : esc(r.value)}</td>
+      <td class="rule-actions-cell">
+        <button class="btn btn-sm rule-edit-btn" data-id="${r.id}" title="Edit rule">&#9998;</button>
+        <button class="btn btn-sm btn-danger rule-delete-btn" data-id="${r.id}" title="Delete rule">&#10005;</button>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.rule-toggle').forEach(cb => {
+    cb.addEventListener('change', () => toggleRule(cb.dataset.id));
+  });
+  tbody.querySelectorAll('.rule-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openEditRuleForm(btn.dataset.id));
+  });
+  tbody.querySelectorAll('.rule-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteRule(btn.dataset.id));
+  });
+}
+
+async function toggleRule(id) {
+  try {
+    const res = await fetch('/api/rules/' + id + '/toggle', { method: 'POST' });
+    if (res.ok) loadRules();
+  } catch (e) { console.error('Toggle failed', e); }
+}
+
+async function deleteRule(id) {
+  if (!confirm('Delete this rule?')) return;
+  try {
+    await fetch('/api/rules/' + id, { method: 'DELETE' });
+    loadRules();
+  } catch (e) { console.error('Delete failed', e); }
+}
+
+function updateValueRowVisibility() {
+  const action = document.getElementById('rf-action').value;
+  document.getElementById('rf-value-row').style.display = action === 'delete' ? 'none' : '';
+}
+
+function openNewRuleForm() {
+  editingRuleId = null;
+  document.getElementById('rule-id').value = '';
+  document.getElementById('rf-name').value = '';
+  document.getElementById('rf-description').value = '';
+  document.getElementById('rf-scope').value = 'request';
+  document.getElementById('rf-match-url').value = '';
+  document.getElementById('rf-target').value = '';
+  document.getElementById('rf-action').value = 'set';
+  document.getElementById('rf-value').value = '';
+  document.getElementById('rf-submit').textContent = 'Add rule';
+  document.getElementById('rf-error').textContent = '';
+  updateValueRowVisibility();
+  document.getElementById('rule-form-wrap').classList.remove('hidden');
+  document.getElementById('rf-name').focus();
+}
+
+async function openEditRuleForm(id) {
+  try {
+    const res = await fetch('/api/rules');
+    const rules = await res.json();
+    const rule = rules.find(r => String(r.id) === String(id));
+    if (!rule) return;
+
+    editingRuleId = id;
+    document.getElementById('rule-id').value = id;
+    document.getElementById('rf-name').value = rule.name;
+    document.getElementById('rf-description').value = rule.description || '';
+    document.getElementById('rf-scope').value = rule.scope;
+    document.getElementById('rf-match-url').value = rule.match_url || '';
+    document.getElementById('rf-target').value = rule.target;
+    document.getElementById('rf-action').value = rule.action;
+    document.getElementById('rf-value').value = rule.value || '';
+    document.getElementById('rf-submit').textContent = 'Update rule';
+    document.getElementById('rf-error').textContent = '';
+    updateValueRowVisibility();
+    document.getElementById('rule-form-wrap').classList.remove('hidden');
+    document.getElementById('rf-name').focus();
+  } catch (e) { console.error('Load rule failed', e); }
+}
+
+function closeRuleForm() {
+  document.getElementById('rule-form-wrap').classList.add('hidden');
+  editingRuleId = null;
+}
+
+async function saveRule(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('rf-error');
+  errEl.textContent = '';
+
+  const name = document.getElementById('rf-name').value.trim();
+  const description = document.getElementById('rf-description').value.trim();
+  const scope = document.getElementById('rf-scope').value;
+  const match_url = document.getElementById('rf-match-url').value.trim();
+  const target = document.getElementById('rf-target').value.trim();
+  const action = document.getElementById('rf-action').value;
+  const rawValue = document.getElementById('rf-value').value.trim();
+  const value = rawValue || 'null';
+
+  if (!name || !target) { errEl.textContent = 'Name and target are required'; return; }
+
+  if (action === 'set') {
+    try { JSON.parse(value); } catch (jsonErr) {
+      errEl.textContent = 'Value must be valid JSON — e.g. "text", 42, true, ["a","b"], {"key":"val"}';
+      return;
+    }
+  }
+
+  const body = { name, description, scope, match_url, target, action, value, active: 1 };
+
+  try {
+    let res;
+    if (editingRuleId) {
+      res = await fetch('/api/rules/' + editingRuleId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } else {
+      res = await fetch('/api/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      errEl.textContent = err.error || 'Save failed';
+      return;
+    }
+    closeRuleForm();
+    loadRules();
+  } catch (err) {
+    errEl.textContent = 'Request failed: ' + err.message;
+  }
 }
