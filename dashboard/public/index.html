@@ -18,6 +18,7 @@
   <nav class="tabs">
     <button class="tab-btn active" data-tab="live">Live feed</button>
     <button class="tab-btn" data-tab="endpoints">Endpoints</button>
+    <button class="tab-btn" data-tab="rules">Rules</button>
     <button class="tab-btn" data-tab="search">Restaurant search</button>
     <button class="tab-btn" data-tab="export">Export</button>
     <button class="tab-btn" data-tab="setup">Setup</button>
@@ -89,6 +90,95 @@
           </tbody>
         </table>
       </div>
+    </section>
+
+    <!-- Rules (Milestone 3) -->
+    <section id="tab-rules" class="tab-content hidden">
+
+      <div class="rules-intro">
+        <p class="search-hint">
+          Rules tell the proxy to modify Deliveroo GraphQL traffic in-flight.
+          <strong>Request rules</strong> inject or override variables in outgoing requests (parameters
+          not exposed in the app UI). <strong>Response rules</strong> transform the data coming
+          back before the browser sees it. Changes take effect on the next request - no restart needed.
+        </p>
+        <button id="add-rule-btn" class="btn btn-sm">+ New rule</button>
+      </div>
+
+      <div id="rule-form-wrap" class="rule-form-wrap hidden">
+        <form id="rule-form" class="rule-form">
+          <input type="hidden" id="rule-id">
+          <div class="rule-form-row">
+            <label class="rule-form-label">
+              Name
+              <input type="text" id="rf-name" class="rule-form-input" required placeholder="e.g. Include Collection">
+            </label>
+            <label class="rule-form-label">
+              Scope
+              <select id="rf-scope" class="rule-form-select">
+                <option value="request">Request (modify outgoing)</option>
+                <option value="response">Response (modify incoming)</option>
+              </select>
+            </label>
+          </div>
+          <div class="rule-form-row">
+            <label class="rule-form-label">
+              Target (dot-path)
+              <input type="text" id="rf-target" class="rule-form-input" required placeholder="e.g. fulfillment_methods">
+              <span class="rule-hint">For request rules: path inside GraphQL <code>variables</code>. For response rules: absolute JSON path (e.g. <code>data.results.meta.restaurantCount</code>).</span>
+            </label>
+            <label class="rule-form-label">
+              Action
+              <select id="rf-action" class="rule-form-select">
+                <option value="set">Set value</option>
+                <option value="delete">Delete field</option>
+              </select>
+            </label>
+          </div>
+          <div class="rule-form-row" id="rf-value-row">
+            <label class="rule-form-label">
+              Value (JSON)
+              <input type="text" id="rf-value" class="rule-form-input mono" placeholder='e.g. ["DELIVERY","COLLECTION"] or "sushi" or 5'>
+              <span class="rule-hint">Must be valid JSON. Ignored for "Delete" action.</span>
+            </label>
+          </div>
+          <div class="rule-form-row">
+            <label class="rule-form-label">
+              URL filter <span class="rule-form-optional">(optional)</span>
+              <input type="text" id="rf-match-url" class="rule-form-input mono" placeholder="e.g. consumer/graphql (leave blank to match all Deliveroo API calls)">
+            </label>
+            <label class="rule-form-label">
+              Description <span class="rule-form-optional">(optional)</span>
+              <input type="text" id="rf-description" class="rule-form-input" placeholder="Brief note about this rule">
+            </label>
+          </div>
+          <div class="rule-form-actions">
+            <button type="submit" class="btn btn-primary" id="rf-submit">Add rule</button>
+            <button type="button" class="btn" id="rf-cancel">Cancel</button>
+            <span id="rf-error" class="rule-error"></span>
+          </div>
+        </form>
+      </div>
+
+      <div class="table-wrap" style="margin-top:1rem">
+        <table id="rules-table">
+          <thead>
+            <tr>
+              <th style="width:3rem">On</th>
+              <th>Name</th>
+              <th style="width:5rem">Scope</th>
+              <th>Target</th>
+              <th style="width:4rem">Action</th>
+              <th>Value</th>
+              <th style="width:5rem"></th>
+            </tr>
+          </thead>
+          <tbody id="rules-tbody">
+            <tr class="empty-row"><td colspan="7">No rules yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
     </section>
 
     <!-- Restaurant Search (Milestone 2) -->
