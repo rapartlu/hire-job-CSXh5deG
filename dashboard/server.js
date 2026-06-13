@@ -505,6 +505,90 @@ app.post('/api/rules/:id/toggle', (req, res) => {
   }
 });
 
+// ── Startup: seed example rules ───────────────────────────────────────────
+// The proxy seeds these on first init via _ensure_db(). This fallback runs
+// in the dashboard in case the dashboard container starts before the proxy
+// has a chance to write to the shared volume (race condition on first boot),
+// or for customers running the dashboard standalone.
+
+const SEED_RULES = [
+  {
+    name: 'Include Collection',
+    description:
+      'Adds COLLECTION to fulfillment_methods. Default Deliveroo web app sends DELIVERY only ' +
+      '-- enabling this surfaces pickup/collection venues that are hidden in the standard ' +
+      'delivery search, often with no delivery fee.',
+    scope: 'request',
+    match_url: '/consumer/graphql',
+    target: 'fulfillment_methods',
+    action: 'set',
+    value: '["DELIVERY","COLLECTION"]',
+  },
+  {
+    name: 'Collection Only',
+    description:
+      'Restricts results to venues offering click-and-collect/pickup only. ' +
+      'Useful for browsing collection options without a delivery fee.',
+    scope: 'request',
+    match_url: '/consumer/graphql',
+    target: 'fulfillment_methods',
+    action: 'set',
+    value: '["COLLECTION"]',
+  },
+  {
+    name: 'Remove Result Cap',
+    description:
+      'Drops LIMIT_QUERY_RESULTS from ui_features. Deliveroo includes this flag in default ' +
+      'web requests -- removing it may increase the number of restaurants returned per search.',
+    scope: 'request',
+    match_url: '/consumer/graphql',
+    target: 'ui_features',
+    action: 'set',
+    value:
+      '["UNAVAILABLE_RESTAURANTS","UI_CARD_BORDER","UI_CAROUSEL_COLOR","UI_PROMOTION_TAG",' +
+      '"UI_BACKGROUND","SCHEDULED_RANGES","UI_SPAN_TAGS","UI_CARD_BADGES","TEXT_SEARCH_COMBINED_VIEW"]',
+  },
+  {
+    name: 'Cuisine Filter',
+    description:
+      'Injects a cuisine keyword into options.query. Change the value to any cuisine ' +
+      '("sushi", "pizza", "thai", etc.) to filter results. Set to "" to clear. ' +
+      'This overrides whatever is typed in the Deliveroo search box.',
+    scope: 'request',
+    match_url: '/consumer/graphql',
+    target: 'options.query',
+    action: 'set',
+    value: '"sushi"',
+  },
+];
+
+function seedExampleRules() {
+  try {
+    const db = getDbWrite();
+    const count = db.prepare('SELECT COUNT(*) as n FROM rules').get().n;
+    if (count === 0) {
+      const now = new Date().toISOString();
+      const insert = db.prepare(
+        `INSERT INTO rules
+           (name, description, scope, match_url, target, action, value, active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
+      );
+      for (const rule of SEED_RULES) {
+        insert.run(
+          rule.name, rule.description, rule.scope, rule.match_url,
+          rule.target, rule.action, rule.value, now
+        );
+      }
+      console.log(`Seeded ${SEED_RULES.length} example rules.`);
+    }
+    db.close();
+  } catch (err) {
+    // Non-fatal: proxy will seed on its own init
+    console.warn('Rule seed skipped (DB not ready yet):', err.message);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`Dashboard running on http://localhost:${PORT}`);
+  seedExampleRules();
 });

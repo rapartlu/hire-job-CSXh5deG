@@ -1,14 +1,12 @@
 """
-mitmproxy addon for CSXh5deG -- Deliveroo API traffic capture.
+mitmproxy addon for CSXh5deG -- Deliveroo API traffic capture + rule engine.
 
-Intercepts HTTPS responses from Deliveroo API hosts and stores them in
-SQLite for analysis. Also records a lightweight seen_hosts log for every
-unique hostname that passes through the proxy, regardless of filter -- this
-helps diagnose cases where Deliveroo uses an unexpected API domain.
+Intercepts HTTPS traffic from Deliveroo API hosts:
+  - capture: stores request/response bodies in SQLite for analysis
+  - rules: modifies requests/responses in flight based on user-configured rules
 
-The CA cert is written directly into the shared data volume by mitmproxy
-itself (the proxy runs with --set confdir=/data/mitmproxy), so the
-dashboard can serve it for browser installation.
+Rules are managed via the dashboard's /api/rules endpoints and stored in the
+same SQLite database. Changes take effect on the next proxied request.
 """
 import json
 import os
@@ -37,6 +35,72 @@ DELIVEROO_ROOT_DOMAINS = {
     "deliveroo.com",
     "deliveroo.co.uk",
 }
+
+# Seed rules inserted on first DB init (all inactive by default).
+# Based on analysis of Deliveroo's getHomeFeed GraphQL variable schema
+# from captured payloads (customer's Biggin Hill session, 2026-06-09).
+_SEED_RULES = [
+    {
+        "name": "Include Collection",
+        "description": (
+            "Adds COLLECTION to fulfillment_methods. "
+            "Default Deliveroo web app sends DELIVERY only -- enabling this "
+            "surfaces pickup/collection venues that are hidden in the standard "
+            "delivery search, often with no delivery fee."
+        ),
+        "scope": "request",
+        "match_url": "/consumer/graphql",
+        "target": "fulfillment_methods",
+        "action": "set",
+        "value": '["DELIVERY","COLLECTION"]',
+    },
+    {
+        "name": "Collection Only",
+        "description": (
+            "Restricts results to venues offering click-and-collect/pickup only. "
+            "Useful for browsing collection options without a delivery fee. "
+            "Combine with a location geohash to compare what's nearby for pickup."
+        ),
+        "scope": "request",
+        "match_url": "/consumer/graphql",
+        "target": "fulfillment_methods",
+        "action": "set",
+        "value": '["COLLECTION"]',
+    },
+    {
+        "name": "Remove Result Cap",
+        "description": (
+            "Drops LIMIT_QUERY_RESULTS from ui_features. "
+            "Deliveroo includes this flag in default web requests -- removing it "
+            "may increase the number of restaurants returned per search. "
+            "Effect depends on Deliveroo server-side interpretation of this flag."
+        ),
+        "scope": "request",
+        "match_url": "/consumer/graphql",
+        "target": "ui_features",
+        "action": "set",
+        "value": (
+            '["UNAVAILABLE_RESTAURANTS","UI_CARD_BORDER","UI_CAROUSEL_COLOR",'
+            '"UI_PROMOTION_TAG","UI_BACKGROUND","SCHEDULED_RANGES","UI_SPAN_TAGS",'
+            '"UI_CARD_BADGES","TEXT_SEARCH_COMBINED_VIEW"]'
+        ),
+    },
+    {
+        "name": "Cuisine Filter",
+        "description": (
+            "Injects a cuisine keyword into options.query. "
+            "Change the value to any cuisine (e.g. \"sushi\", \"pizza\", \"thai\") "
+            "to filter results to matching restaurants. "
+            "Set to \"\" (empty string) to clear. "
+            "This overrides whatever is typed in the Deliveroo search box."
+        ),
+        "scope": "request",
+        "match_url": "/consumer/graphql",
+        "target": "options.query",
+        "action": "set",
+        "value": '"sushi"',
+    },
+]
 
 
 def _is_deliveroo_api(host: str) -> bool:
@@ -85,16 +149,157 @@ def _ensure_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rules (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            description TEXT    NOT NULL DEFAULT '',
+            scope       TEXT    NOT NULL DEFAULT 'request',
+            match_url   TEXT    NOT NULL DEFAULT '',
+            target      TEXT    NOT NULL,
+            action      TEXT    NOT NULL DEFAULT 'set',
+            value       TEXT    NOT NULL DEFAULT 'null',
+            active      INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT    NOT NULL
+        )
+        """
+    )
     conn.commit()
+
+    # Seed example rules on first init (only if table is empty).
+    count = conn.execute("SELECT COUNT(*) FROM rules").fetchone()[0]
+    if count == 0:
+        now = datetime.now(timezone.utc).isoformat()
+        for rule in _SEED_RULES:
+            conn.execute(
+                """
+                INSERT INTO rules
+                    (name, description, scope, match_url, target, action, value, active, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    rule["name"],
+                    rule["description"],
+                    rule["scope"],
+                    rule["match_url"],
+                    rule["target"],
+                    rule["action"],
+                    rule["value"],
+                    now,
+                ),
+            )
+        conn.commit()
+
     conn.close()
+
+
+def _get_active_rules(scope: str) -> list:
+    """Return all active rules for the given scope, ordered by id."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM rules WHERE scope = ? AND active = 1 ORDER BY id ASC",
+            (scope,),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def _apply_dot_path(obj, path: str, action: str, value_json: str) -> None:
+    """Mutate obj in-place via a dot-separated path.
+
+    Numeric path segments are treated as list indices.
+    action: 'set' replaces/inserts the value; 'delete' removes it.
+    value_json: JSON-encoded value string (used only for 'set').
+
+    Examples:
+      path="fulfillment_methods"          → obj["fulfillment_methods"]
+      path="options.query"                → obj["options"]["query"]
+      path="data.results.layoutGroups.0"  → obj["data"]["results"]["layoutGroups"][0]
+    """
+    parts = path.split(".")
+    cursor = obj
+
+    for part in parts[:-1]:
+        if isinstance(cursor, list):
+            cursor = cursor[int(part)]
+        else:
+            cursor = cursor[part]
+
+    last = parts[-1]
+
+    if action == "delete":
+        if isinstance(cursor, list):
+            del cursor[int(last)]
+        else:
+            cursor.pop(last, None)
+    else:  # "set"
+        value = json.loads(value_json)
+        if isinstance(cursor, list):
+            idx = int(last)
+            if idx < len(cursor):
+                cursor[idx] = value
+            else:
+                cursor.append(value)
+        else:
+            cursor[last] = value
 
 
 class DeliverooCapture:
     def __init__(self):
         _ensure_db()
 
+    def request(self, flow):
+        """Apply active request rules to outbound Deliveroo GraphQL calls.
+
+        Reads active 'request' rules from SQLite and applies each one to the
+        outbound request's GraphQL variables before the request leaves the
+        machine. If no rules are active, this is a no-op.
+        """
+        if not _is_deliveroo_api(flow.request.pretty_host):
+            return
+        if flow.request.method != "POST":
+            return
+
+        rules = _get_active_rules("request")
+        if not rules:
+            return
+
+        try:
+            body = json.loads(flow.request.content.decode("utf-8", errors="replace"))
+        except Exception:
+            return
+
+        if not isinstance(body.get("variables"), dict):
+            return
+
+        changed = False
+        for rule in rules:
+            match_url = rule.get("match_url", "")
+            if match_url and match_url not in flow.request.url:
+                continue
+            try:
+                _apply_dot_path(
+                    body["variables"],
+                    rule["target"],
+                    rule["action"],
+                    rule.get("value", "null"),
+                )
+                changed = True
+            except Exception:
+                pass
+
+        if changed:
+            new_body = json.dumps(body).encode("utf-8")
+            flow.request.content = new_body
+            flow.request.headers["content-length"] = str(len(new_body))
+
     def response(self, flow):
-        """Record Deliveroo traffic to SQLite."""
+        """Record Deliveroo traffic to SQLite; apply active response rules."""
         host = flow.request.pretty_host
         is_api = _is_deliveroo_api(host)
         is_deliveroo = is_api or _is_deliveroo_any(host)
@@ -153,6 +358,39 @@ class DeliverooCapture:
 
         conn.commit()
         conn.close()
+
+        # Apply response rules (modify response in flight after capture)
+        if is_api and flow.request.method == "POST":
+            rules = _get_active_rules("response")
+            if not rules:
+                return
+            try:
+                resp_obj = json.loads(
+                    flow.response.content.decode("utf-8", errors="replace")
+                )
+            except Exception:
+                return
+
+            changed = False
+            for rule in rules:
+                match_url = rule.get("match_url", "")
+                if match_url and match_url not in flow.request.url:
+                    continue
+                try:
+                    _apply_dot_path(
+                        resp_obj,
+                        rule["target"],
+                        rule["action"],
+                        rule.get("value", "null"),
+                    )
+                    changed = True
+                except Exception:
+                    pass
+
+            if changed:
+                new_body = json.dumps(resp_obj).encode("utf-8")
+                flow.response.content = new_body
+                flow.response.headers["content-length"] = str(len(new_body))
 
 
 addons = [DeliverooCapture()]

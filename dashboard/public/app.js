@@ -439,7 +439,7 @@ async function loadRules() {
 function renderRules(rules) {
   const tbody = document.getElementById('rules-tbody');
   if (!rules.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No rules yet &mdash; click &ldquo;+ New rule&rdquo; to add one. The proxy ships with three disabled examples you can enable.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No rules yet &mdash; restart the proxy (<code>docker compose restart proxy</code>) to seed four Deliveroo-specific examples, then reload this tab. Or click &ldquo;+ New rule&rdquo; to add one manually.</td></tr>';
     return;
   }
   tbody.innerHTML = rules.map(r => `
