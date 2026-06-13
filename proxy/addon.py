@@ -299,6 +299,118 @@ def _ensure_db() -> None:
             0,
             now,
         ),
+        # ── 6. Feed cleanup from payload inspection ─────────────────────────────
+        # Rules below are seeded ENABLED (active=1). They remove advertising
+        # artefacts that the Deliveroo web client requests but does not expose
+        # as UI options.
+        #
+        # Evidence per rule:
+        #   ui_blocks: the June 2026 captured cURL included the response header
+        #     X-ROO-CLIENT-CACHED-COMPONENTS listing
+        #     "sponsored-merchandising-card-v1-c44c035f", confirming
+        #     MERCHANDISING_CARD maps to embedded sponsored restaurant slots.
+        #     BANNER = the top-of-feed promotional strip (unrelated to deals).
+        #   ui_targets/EDITORIAL_CONTENT: present in the default variables the
+        #     web app sends; serves curated promotional groupings rather than
+        #     organic restaurant results.
+        #   ui_layouts/CAROUSEL: carousel groups surface sponsored/editorial
+        #     collections (e.g. "Trending near you" branded rows).
+        #   ui_features/UI_PROMOTION_TAG: renders deal/offer badge overlays on
+        #     restaurant cards. Removing it does not filter restaurants - it
+        #     just strips the badge from the card layout.
+        (
+            "Strip ads and promo banners",
+            "Remove BANNER and MERCHANDISING_CARD from ui_blocks. BANNER = "
+            "top-of-feed promotional strip. MERCHANDISING_CARD = embedded "
+            "sponsored restaurant slots (confirmed via "
+            "sponsored-merchandising-card-v1 component seen in captured "
+            "request headers). Leaves CARD, SHORTCUT, BUTTON, ROO_BLOCK. "
+            "Enabled by default - purely subtractive.",
+            "request",
+            "",
+            "ui_blocks",
+            "set",
+            '["CARD","SHORTCUT","BUTTON","ROO_BLOCK"]',
+            1,
+            now,
+        ),
+        (
+            "Strip editorial targets",
+            "Remove EDITORIAL_CONTENT from ui_targets. Editorial content is "
+            "Deliveroo-curated promotional groupings separate from organic "
+            "restaurant results. Removing it narrows the feed to restaurants "
+            "matching your location and filters only. Enabled by default.",
+            "request",
+            "",
+            "ui_targets",
+            "set",
+            '["PARAMS","RESTAURANT","MENU_ITEM","WEB_PAGE","DEEP_LINK"]',
+            1,
+            now,
+        ),
+        (
+            "List view only (no carousels)",
+            "Set ui_layouts to LIST only, removing CAROUSEL. Carousel groups "
+            "are used for branded or editorial collections - typically sponsored "
+            "Explore sections. Switching to list-only gives a flat, "
+            "uninterrupted restaurant feed. Enabled by default.",
+            "request",
+            "",
+            "ui_layouts",
+            "set",
+            '["LIST"]',
+            1,
+            now,
+        ),
+        (
+            "Strip promotion badges",
+            "Remove UI_PROMOTION_TAG from ui_features. This flag tells "
+            "Deliveroo to render deal/offer badges on restaurant cards. "
+            "Stripping it gives a cleaner card layout without affecting "
+            "whether deals actually exist at the restaurant. Enabled by default.",
+            "request",
+            "",
+            "ui_features",
+            "set",
+            '["UNAVAILABLE_RESTAURANTS","LIMIT_QUERY_RESULTS","UI_CARD_BORDER",'
+            '"UI_CAROUSEL_COLOR","UI_BACKGROUND","SCHEDULED_RANGES","UI_SPAN_TAGS",'
+            '"UI_CARD_BADGES","TEXT_SEARCH_COMBINED_VIEW"]',
+            1,
+            now,
+        ),
+        # ── 7. Scheduling behaviour ─────────────────────────────────────────────
+        (
+            "ASAP delivery only",
+            "Set options.fulfillment_include_asap_days=false. The default "
+            "(true) includes restaurants that only do scheduled/next-day "
+            "delivery, making them appear even when they cannot deliver now. "
+            "Setting this to false shows only restaurants open for immediate "
+            "delivery. May noticeably reduce result count in some areas.",
+            "request",
+            "consumer/graphql",
+            "options.fulfillment_include_asap_days",
+            "set",
+            "false",
+            0,
+            now,
+        ),
+        # ── 8. Response mutations from captured basket payload ──────────────────
+        (
+            "Disable basket discovery",
+            "Set data.get_basket_page_summary.isBasketDiscoveryEnabled=false "
+            "in basket GraphQL responses. isBasketDiscoveryEnabled=true was "
+            "observed in a captured basket payload. This flag controls a UI "
+            "feature that suggests items from other restaurants inside your "
+            "basket view. Disable if you prefer a plain basket without "
+            "cross-sell suggestions.",
+            "response",
+            "consumer/graphql",
+            "data.get_basket_page_summary.isBasketDiscoveryEnabled",
+            "set",
+            "false",
+            0,
+            now,
+        ),
     ]
     for rule in examples:
         exists = conn.execute(
