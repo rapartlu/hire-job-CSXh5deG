@@ -500,29 +500,37 @@ class DeliverooCapture:
         except Exception:
             return
 
-        if "variables" not in body or not isinstance(body["variables"], dict):
-            return
+        # Deliveroo sends batched GraphQL requests as a JSON array:
+        #   [{"operationName": "getHomeFeed", "variables": {...}}, ...]
+        # Unwrap so rules are applied to each operation individually.
+        items = body if isinstance(body, list) else [body]
 
         changed = False
-        for rule in rules:
-            match_url = rule.get("match_url", "")
-            if match_url and match_url not in flow.request.url:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if "variables" not in item or not isinstance(item["variables"], dict):
                 continue
 
-            target = rule.get("target", "")
-            action = rule.get("action", "set")
+            for rule in rules:
+                match_url = rule.get("match_url", "")
+                if match_url and match_url not in flow.request.url:
+                    continue
 
-            try:
-                if action == "set":
-                    value = json.loads(rule.get("value", "null"))
-                    # Resolve target relative to 'variables'
-                    if _set_path(body["variables"], target, value):
-                        changed = True
-                elif action == "delete":
-                    if _del_path(body["variables"], target):
-                        changed = True
-            except Exception:
-                pass
+                target = rule.get("target", "")
+                action = rule.get("action", "set")
+
+                try:
+                    if action == "set":
+                        value = json.loads(rule.get("value", "null"))
+                        # Resolve target relative to 'variables'
+                        if _set_path(item["variables"], target, value):
+                            changed = True
+                    elif action == "delete":
+                        if _del_path(item["variables"], target):
+                            changed = True
+                except Exception:
+                    pass
 
         if changed:
             new_body = json.dumps(body, ensure_ascii=False).encode("utf-8")
